@@ -1,33 +1,82 @@
-import React from "react";
-import PropTypes from "prop-types";
-import { CacheProvider } from "@emotion/react";
-import { ThemeProvider, CssBaseline } from "@mui/material";
+import Head from 'next/head';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 
-import createEmotionCache from "../utility/createEmotionCache";
-import lightTheme from "../styles/theme/lightTheme";
-import "../styles/globals.css";
-import PersistentDrawerLeft from "../components/Navbar";
+import 'styles/globals.css';
 
-const clientSideEmotionCache = createEmotionCache();
+import { userService } from 'services';
+import { Nav, Alert } from 'components';
 
-const MyApp = (props) => {
-  const { Component, emotionCache = clientSideEmotionCache, pageProps } = props;
+export default App;
 
-  return (
-    <CacheProvider value={emotionCache}>
-      <ThemeProvider theme={lightTheme}>
-        <CssBaseline />
-        <PersistentDrawerLeft />
-        <Component {...pageProps} />
-      </ThemeProvider>
-    </CacheProvider>
-  );
-};
+function App({ Component, pageProps }) {
+    const router = useRouter();
+    const [user, setUser] = useState(null);
+    const [authorized, setAuthorized] = useState(false);
 
-export default MyApp;
+    useEffect(() => {
+        // on initial load - run auth check 
+        authCheck(router.asPath);
 
-MyApp.propTypes = {
-  Component: PropTypes.elementType.isRequired,
-  emotionCache: PropTypes.object,
-  pageProps: PropTypes.object.isRequired,
-};
+        // on route change start - hide page content by setting authorized to false  
+        const hideContent = () => setAuthorized(false);
+        router.events.on('routeChangeStart', hideContent);
+
+        // on route change complete - run auth check 
+        router.events.on('routeChangeComplete', authCheck)
+
+        // unsubscribe from events in useEffect return function
+        return () => {
+            router.events.off('routeChangeStart', hideContent);
+            router.events.off('routeChangeComplete', authCheck);
+        }
+
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    function authCheck(url) {
+        // redirect to login page if accessing a private page and not logged in 
+        setUser(userService.userValue);
+        const publicPaths = ['/account/login', '/account/register'];
+        const path = url.split('?')[0];
+        if (!userService.userValue && !publicPaths.includes(path)) {
+            setAuthorized(false);
+            router.push({
+                pathname: '/account/login',
+                query: { returnUrl: router.asPath }
+            });
+        } else {
+            setAuthorized(true);
+        }
+    }
+
+    return (
+        <>
+            <Head>
+               <title>AExperts Admin Console</title>
+            </Head>
+
+            <div className={`app-container ${user ? 'bg-light' : ''}`}>
+                <Nav />
+                <Alert />
+                {authorized &&
+                    <Component {...pageProps} />
+                }
+            </div>
+
+            {/* credits */}
+            <div className="text-center mt-4">
+                <p>
+                    <a href="https://eralpkor.com" target="_top">eralpkor.com</a>
+                </p>
+            </div>
+        </>
+    );
+}
+
+// {/* <Head>
+//                 <title>Next.js 11 - User Registration and Login Example</title>
+                
+//                 {/* eslint-disable-next-line @next/next/no-css-tags */}
+//                 <link href="//netdna.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet" />
+//             </Head> */}
